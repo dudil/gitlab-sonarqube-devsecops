@@ -3,59 +3,79 @@ services:
 
   sonarqube:
     image: sonarqube:lts-community
-    restart: unless-stopped
+    container_name: sonarqube
+    # restart: unless-stopped
     environment: 
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
       SONAR_TELEMETRY_ENABLE: 'false'
+    ports: 
+      - '9000:9000'
+    networks:
+      - gitlabnet
     volumes: 
       - ./vols/sonarqube/data:/opt/sonarqube/data
       - ./vols/sonarqube/extensions:/opt/sonarqube/extensions
       - ./vols/sonarqube/logs:/opt/sonarqube/logs
       - ./vols/sonarqube/temp:/opt/sonarqube/temp
-    ports: 
-      - '9000:9000'
-    networks: 
-      - gitlab
+    
 
   gitlab:
     image: gitlab/gitlab-ce:latest
-    hostname: gitlab
-    restart: unless-stopped
+    container_name: gitlab
+    # restart: unless-stopped
+    # hostname: 'gitlab'
     environment:
       # https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/files/gitlab-config-template/gitlab.rb.template
-      GITLAB_OMNIBUS_CONFIG: |        
-        gitlab_rails['gitlab_shell_ssh_port'] = 8822
-        gitlab_rails['gitlab_default_can_create_group'] = false
-        gitlab_rails['gitlab_username_changing_enabled'] = false
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://${GITLAB_DOMAIN}:8880'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        nginx['listen_port'] = 80
         gitlab_rails['initial_root_password'] = '$GITLAB_PASSWORD'
         gitlab_rails['initial_shared_runners_registration_token'] = '$GITLAB_RUNNER_TOKEN'
+        gitlab_rails['backup_keep_time'] = 172800
         gitlab_rails['gitlab_kas_enabled'] = false
         gitlab_rails['gitlab_email_enabled'] = false
+        gitlab_rails['smtp_enable'] = false
         gitlab_rails['incoming_email_enabled'] = false
         gitlab_rails['lfs_enabled'] = false
         gitlab_rails['terraform_state_enabled'] = false
         prometheus['monitor_kubernetes'] = false
-
     ports:
       - "8880:80"
-      - "8822:22"
+      - "2222:22"
+    networks: 
+      gitlabnet:
+          aliases: 
+            - ${GITLAB_DOMAIN}
     volumes:
       - ./vols/gitlab/config:/etc/gitlab
       - ./vols/gitlab/data:/var/opt/gitlab
       - ./vols/gitlab/logs:/var/log/gitlab
-    networks:
-      - gitlab
 
   gitlab-runner:
     image: gitlab/gitlab-runner:latest
-    restart: unless-stopped
+    container_name: gitlab-runner
+    # restart: unless-stopped
     depends_on:
       - gitlab
+    environment: 
+      # FF_NETWORK_PER_BUILD: 'true'
+      REGISTER_RUN_UNTAGGED: 'true'
+      REGISTER_LOCKED: 'false'
+      CI_SERVER_URL: 'http://gitlab'
+      CI_SERVER_TOKEN: '$GITLAB_RUNNER_TOKEN'
+      CLONE_URL: 'http://gitlab'
+      DOCKER_VOLUMES: '/var/run/docker.sock:/var/run/docker.sock'
+      DOCKER_NETWORK_MODE: '${GITLAB_NETWORK}'
+    # ports:
+    #   - "8093:8093"
+    networks: 
+      - gitlabnet
     volumes:
-      - ./vols/gitlab-runner/config.toml:/etc/gitlab-runner/config.toml
+      - ./vols/gitlab-runner/config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - gitlab
 
 networks:
-  gitlab:
+  gitlabnet:
+    external:
+      name: ${GITLAB_NETWORK}

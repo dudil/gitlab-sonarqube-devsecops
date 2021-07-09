@@ -4,7 +4,7 @@ services:
   sonarqube:
     image: sonarqube:lts-community
     container_name: sonarqube
-    # restart: unless-stopped
+    restart: unless-stopped
     environment: 
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
       SONAR_TELEMETRY_ENABLE: 'false'
@@ -22,12 +22,11 @@ services:
   gitlab:
     image: gitlab/gitlab-ce:latest
     container_name: gitlab
-    # restart: unless-stopped
-    # hostname: 'gitlab'
+    restart: unless-stopped
     environment:
       # https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/files/gitlab-config-template/gitlab.rb.template
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://${GITLAB_DOMAIN}:8880'
+        external_url 'http://$GITLAB_DOMAIN:8880'
         gitlab_rails['gitlab_shell_ssh_port'] = 2222
         nginx['listen_port'] = 80
         gitlab_rails['initial_root_password'] = '$GITLAB_PASSWORD'
@@ -46,7 +45,7 @@ services:
     networks: 
       gitlabnet:
           aliases: 
-            - ${GITLAB_DOMAIN}
+            - $GITLAB_DOMAIN
     volumes:
       - ./vols/gitlab/config:/etc/gitlab
       - ./vols/gitlab/data:/var/opt/gitlab
@@ -55,20 +54,23 @@ services:
   gitlab-runner:
     image: gitlab/gitlab-runner:latest
     container_name: gitlab-runner
-    # restart: unless-stopped
+    restart: unless-stopped
     depends_on:
       - gitlab
     environment: 
-      # FF_NETWORK_PER_BUILD: 'true'
       REGISTER_RUN_UNTAGGED: 'true'
       REGISTER_LOCKED: 'false'
+      REGISTRATION_TOKEN: '$GITLAB_RUNNER_TOKEN'
       CI_SERVER_URL: 'http://gitlab'
-      CI_SERVER_TOKEN: '$GITLAB_RUNNER_TOKEN'
+      RUNNER_NAME: 'default-runner'
+      RUNNER_EXECUTOR: 'docker'
       CLONE_URL: 'http://gitlab'
+      REGISTER_LOCKED: 'false'
+      REGISTER_RUN_UNTAGGED: 'true'
+      REGISTER_ACCESS_LEVEL: 'not_protected'
+      DOCKER_IMAGE: 'ubuntu:latest'
       DOCKER_VOLUMES: '/var/run/docker.sock:/var/run/docker.sock'
-      DOCKER_NETWORK_MODE: '${GITLAB_NETWORK}'
-    # ports:
-    #   - "8093:8093"
+      DOCKER_NETWORK_MODE: '$GITLAB_NETWORK'
     networks: 
       - gitlabnet
     volumes:
@@ -78,4 +80,4 @@ services:
 networks:
   gitlabnet:
     external:
-      name: ${GITLAB_NETWORK}
+      name: $GITLAB_NETWORK

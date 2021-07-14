@@ -1,28 +1,61 @@
-version: '3.5'
+version: '3.9'
 services:
 
   sonarqube:
     image: sonarqube:lts-community
     container_name: sonarqube
-    restart: unless-stopped
+    depends_on:
+      db:
+        condition: "service_healthy"
+    profiles:
+      - sonarqube
+      - full
     environment: 
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
       SONAR_TELEMETRY_ENABLE: 'false'
+      SONAR_JDBC_URL: 'jdbc:postgresql://db:5432/${PG_USERNAME}'
+      SONAR_JDBC_USERNAME: '${PG_USERNAME}'
+      SONAR_JDBC_PASSWORD: '${PG_PASSWORD}'
     ports: 
       - '9000:9000'
     networks:
       - gitlabnet
+      - sonarnet
     volumes: 
       - ./vols/sonarqube/data:/opt/sonarqube/data
       - ./vols/sonarqube/extensions:/opt/sonarqube/extensions
-      - ./vols/sonarqube/logs:/opt/sonarqube/logs
-      - ./vols/sonarqube/temp:/opt/sonarqube/temp
-    
+
+  db:
+    image: postgres
+    container_name: db
+    healthcheck:
+      test: [ 'CMD-SHELL', 'pg_isready -U ${PG_USERNAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - sonarqube
+      - full
+    environment:
+      POSTGRES_USER: '${PG_USERNAME}'
+      POSTGRES_PASSWORD: '${PG_PASSWORD}'
+    networks:
+      - sonarnet
+    volumes:
+        - ./vols/postgresql:/var/lib/postgresql
+        - ./vols/postgresql/data:/var/lib/postgresql/data
 
   gitlab:
     image: gitlab/gitlab-ce:latest
     container_name: gitlab
-    restart: unless-stopped
+    healthcheck:
+      test: [ 'CMD-SHELL', '/opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10']
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    profiles:
+      - gitlab
+      - full
     environment:
       # https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/files/gitlab-config-template/gitlab.rb.template
       GITLAB_OMNIBUS_CONFIG: |
@@ -31,14 +64,6 @@ services:
         nginx['listen_port'] = 80
         gitlab_rails['initial_root_password'] = '$GITLAB_PASSWORD'
         gitlab_rails['initial_shared_runners_registration_token'] = '$GITLAB_RUNNER_TOKEN'
-        gitlab_rails['backup_keep_time'] = 172800
-        gitlab_rails['gitlab_kas_enabled'] = false
-        gitlab_rails['gitlab_email_enabled'] = false
-        gitlab_rails['smtp_enable'] = false
-        gitlab_rails['incoming_email_enabled'] = false
-        gitlab_rails['lfs_enabled'] = false
-        gitlab_rails['terraform_state_enabled'] = false
-        prometheus['monitor_kubernetes'] = false
     ports:
       - "8880:80"
       - "2222:22"
@@ -54,20 +79,12 @@ services:
   gitlab-runner:
     image: gitlab/gitlab-runner:latest
     container_name: gitlab-runner
-    restart: unless-stopped
-    depends_on:
+    profiles:
       - gitlab
+      - full
     environment: 
-      REGISTER_RUN_UNTAGGED: 'true'
-      REGISTER_LOCKED: 'false'
-      REGISTRATION_TOKEN: '$GITLAB_RUNNER_TOKEN'
-      CI_SERVER_URL: 'http://gitlab'
       RUNNER_NAME: 'default-runner'
       RUNNER_EXECUTOR: 'docker'
-      CLONE_URL: 'http://gitlab'
-      REGISTER_LOCKED: 'false'
-      REGISTER_RUN_UNTAGGED: 'true'
-      REGISTER_ACCESS_LEVEL: 'not_protected'
       DOCKER_IMAGE: 'ubuntu:latest'
       DOCKER_VOLUMES: '/var/run/docker.sock:/var/run/docker.sock'
       DOCKER_NETWORK_MODE: '$GITLAB_NETWORK'
@@ -78,6 +95,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
+  sonarnet:
   gitlabnet:
     external:
       name: $GITLAB_NETWORK

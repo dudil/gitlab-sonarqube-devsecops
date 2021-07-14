@@ -26,4 +26,4 @@ mkdir ./vols/sonarqube/extensions -p
 mkdir ./vols/gitlab-runner/config -p
 touch -a ./vols/gitlab-runner/config/config.toml
 
-docker-compose --profile full up --build -d --remove-orphans
+docker-compose --profile sonarqube up --build -d --remove-orphans

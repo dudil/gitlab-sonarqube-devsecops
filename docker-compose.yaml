@@ -1,9 +1,10 @@
 version: '3.9'
 services:
 
-  sonarqube:
+  onarqube:
     image: sonarqube:lts-community
     container_name: sonarqube
+    restart: always
     depends_on:
       db:
         condition: "service_healthy"
@@ -25,9 +26,10 @@ services:
       - ./vols/sonarqube/data:/opt/sonarqube/data
       - ./vols/sonarqube/extensions:/opt/sonarqube/extensions
 
-  db:
+      db:
     image: postgres
     container_name: db
+    restart: always
     healthcheck:
       test: [ 'CMD-SHELL', 'pg_isready -U ${PG_USERNAME}']
       interval: 5s
@@ -43,11 +45,12 @@ services:
       - sonarnet
     volumes:
         - ./vols/postgresql:/var/lib/postgresql
-        - ./vols/postgresql/data:/var/lib/postgresql/data
+        - ./vols/postgresql_data:/var/lib/postgresql/data
 
   gitlab:
     image: gitlab/gitlab-ce:latest
     container_name: gitlab
+    restart: always
     healthcheck:
       test: [ 'CMD-SHELL', '/opt/gitlab/bin/gitlab-healthcheck --fail --max-time 10']
       interval: 30s

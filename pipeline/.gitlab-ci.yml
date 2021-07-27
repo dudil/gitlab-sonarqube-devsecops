@@ -1,0 +1,13 @@
+stages:
+  - sonarqube
+
+sonarqube:
+  stage: sonarqube
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  script:
+    - sonar-scanner -Dsonar.projectKey="$CI_PROJECT_NAME" -Dsonar.qualitygate.wait="true" -Dsonar.exclusions="**/*.java"
+  allow_failure: true

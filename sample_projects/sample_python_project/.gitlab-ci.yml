@@ -4,7 +4,7 @@ stages:
 
 qualitygate:
   stage: qualitygate
-  image: python:3.8
+  image: python:3.12
   variables:
     PIPENV_VENV_IN_PROJECT: "true"
   script:
